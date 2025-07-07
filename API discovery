@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# API Discovery Script
+
+# Scans repository for Java and Node.js API endpoints
+
+echo “🔍 Starting API endpoint discovery…”
+
+# Create output directories
+
+mkdir -p generated/raw-endpoints
+mkdir -p generated/openapi-specs
+mkdir -p generated/bruno-collections
+
+# Find Java endpoints
+
+echo “🔍 Scanning for Java endpoints…”
+find . -name “*.java” -type f | while read -r file; do
+echo “Analyzing: $file”
+
+# Look for Spring Boot annotations
+
+grep -n -E “@(RestController|Controller|RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)” “$file” > /dev/null
+if [ $? -eq 0 ]; then
+echo “Found Spring Boot controller: $file”
+
+```
+# Extract endpoint information
+cat "$file" | grep -E -A 5 -B 2 "@(RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)" >> "generated/raw-endpoints/java-endpoints.txt"
+echo "---FILE: $file---" >> "generated/raw-endpoints/java-endpoints.txt"
+```
+
+fi
+
+# Look for JAX-RS annotations
+
+grep -n -E “@(Path|GET|POST|PUT|DELETE|PATCH)” “$file” > /dev/null
+if [ $? -eq 0 ]; then
+echo “Found JAX-RS resource: $file”
+
+```
+# Extract endpoint information
+cat "$file" | grep -E -A 5 -B 2 "@(Path|GET|POST|PUT|DELETE|PATCH)" >> "generated/raw-endpoints/jaxrs-endpoints.txt"
+echo "---FILE: $file---" >> "generated/raw-endpoints/jaxrs-endpoints.txt"
+```
+
+fi
+done
+
+# Find Node.js endpoints
+
+echo “🔍 Scanning for Node.js endpoints…”
+find . -name “*.js” -o -name “*.ts” | grep -E “(route|router|app|server|controller)” | while read -r file; do
+echo “Analyzing: $file”
+
+# Look for Express.js routes
+
+grep -n -E “(app.|router.|express().*.(get|post|put|delete|patch)” “$file” > /dev/null
+if [ $? -eq 0 ]; then
+echo “Found Express routes: $file”
+
+```
+# Extract route information
+cat "$file" | grep -E -A 3 -B 1 "(app\.|router\.|express\().*\.(get|post|put|delete|patch)" >> "generated/raw-endpoints/nodejs-endpoints.txt"
+echo "---FILE: $file---" >> "generated/raw-endpoints/nodejs-endpoints.txt"
+```
+
+fi
+
+# Look for Fastify routes
+
+grep -n -E “fastify.(get|post|put|delete|patch)” “$file” > /dev/null
+if [ $? -eq 0 ]; then
+echo “Found Fastify routes: $file”
+
+```
+# Extract route information
+cat "$file" | grep -E -A 3 -B 1 "fastify\.(get|post|put|delete|patch)" >> "generated/raw-endpoints/fastify-endpoints.txt"
+echo "---FILE: $file---" >> "generated/raw-endpoints/fastify-endpoints.txt"
+```
+
+fi
+done
+
+# Create summary
+
+echo “📊 Creating discovery summary…”
+{
+echo “# API Endpoint Discovery Summary”
+echo “Generated on: $(date)”
+echo “”
+echo “## Java Endpoints Found:”
+if [ -f “generated/raw-endpoints/java-endpoints.txt” ]; then
+echo “- Spring Boot controllers: $(grep -c ‘@Controller|@RestController’ generated/raw-endpoints/java-endpoints.txt || echo 0)”
+echo “- Request mappings: $(grep -c ‘@.*Mapping’ generated/raw-endpoints/java-endpoints.txt || echo 0)”
+fi
+
+if [ -f “generated/raw-endpoints/jaxrs-endpoints.txt” ]; then
+echo “- JAX-RS resources: $(grep -c ‘@Path’ generated/raw-endpoints/jaxrs-endpoints.txt || echo 0)”
+echo “- JAX-RS methods: $(grep -c ‘@GET|@POST|@PUT|@DELETE|@PATCH’ generated/raw-endpoints/jaxrs-endpoints.txt || echo 0)”
+fi
+
+echo “”
+echo “## Node.js Endpoints Found:”
+if [ -f “generated/raw-endpoints/nodejs-endpoints.txt” ]; then
+echo “- Express routes: $(grep -c ‘app.|router.’ generated/raw-endpoints/nodejs-endpoints.txt || echo 0)”
+fi
+
+if [ -f “generated/raw-endpoints/fastify-endpoints.txt” ]; then
+echo “- Fastify routes: $(grep -c ‘fastify.’ generated/raw-endpoints/fastify-endpoints.txt || echo 0)”
+fi
+} > generated/discovery-summary.md
+
+echo “✅ API discovery complete! Check generated/discovery-summary.md for results.”
