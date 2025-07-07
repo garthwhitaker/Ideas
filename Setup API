@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Setup script for OpenAPI and Bruno generation
+
+echo “🚀 Setting up OpenAPI and Bruno generation tools…”
+
+# Create directory structure
+
+mkdir -p .github/workflows
+mkdir -p scripts
+mkdir -p generated/{raw-endpoints,openapi-specs,bruno-collections}
+
+# Make scripts executable
+
+chmod +x scripts/discover-apis.sh
+chmod +x scripts/generate-openapi.py
+chmod +x scripts/openapi-to-bruno.py
+
+# Create .gitignore for generated files
+
+cat > .gitignore << EOF
+
+# Generated API specs and collections
+
+generated/raw-endpoints/
+generated/openapi-specs/
+generated/bruno-collections/
+
+# Node modules
+
+node_modules/
+
+# Python cache
+
+**pycache**/
+*.pyc
+
+# IDE files
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+
+.DS_Store
+Thumbs.db
+EOF
+
+# Create requirements.txt for Python dependencies
+
+cat > requirements.txt << EOF
+PyYAML>=6.0
+requests>=2.28.0
+EOF
+
+# Create package.json for Node.js dependencies
+
+cat > package.json << EOF
+{
+“name”: “api-specs-generator”,
+“version”: “1.0.0”,
+“description”: “Auto-generate
