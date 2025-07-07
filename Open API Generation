@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+“””
+OpenAPI Spec Generator
+Converts discovered API endpoints into OpenAPI 3.0 specifications
+“””
+
+import os
+import re
+import json
+import yaml
+from typing import Dict, List, Any
+from pathlib import Path
+
+class OpenAPIGenerator:
+def **init**(self):
+self.openapi_template = {
+“openapi”: “3.0.3”,
+“info”: {
+“title”: “Auto-Generated API”,
+“version”: “1.0.0”,
+“description”: “Automatically generated OpenAPI specification”
+},
+“servers”: [
+{“url”: “http://localhost:8080”, “description”: “Development server”}
+],
+“paths”: {},
+“components”: {
+“schemas”: {},
+“responses”: {},
+“parameters”: {}
+}
+}
+
+```
+def parse_spring_boot_endpoints(self, content: str) -> List[Dict]:
+    """Parse Spring Boot controller endpoints"""
+    endpoints = []
+    
+    # Regex patterns for Spring Boot annotations
+    request_mapping_pattern = r'@RequestMapping\(.*?value\s*=\s*["\']([^"\']+)["\'].*?\)'
+    method_mapping_pattern = r'@(Get|Post|Put|Delete|Patch)Mapping\(.*?value\s*=\s*["\']([^"\']+)["\'].*?\)'
+    method_mapping_no_value = r'@(Get|Post|Put|Delete|Patch)Mapping\(["\']([^"\']+)["\'].*?\)'
+    
+    # Extract class-level RequestMapping
+    class_path = ""
+    class_mapping_match = re.search(request_mapping_pattern, content)
+    if class_mapping_match:
+        class_path = class_mapping_match.group(1)
+    
+    # Extract method-level mappings
+    method_matches = re.finditer(method_mapping_pattern, content)
+    for match in method_matches:
+        method = match.group(1).lower()
+        path = class_path + match.group(2)
+        endpoints.append({
+            "path": path,
+            "method": method,
+            "framework": "spring-boot"
+        })
+    
+    # Extract method mappings without explicit value parameter
+    method_matches_no_value = re.finditer(method_mapping_no_value, content)
+    for match in method_matches_no_value:
+        method = match.group(1).lower()
+        path = class_path + match.group(2)
+        endpoints.append({
+            "path": path,
+            "method": method,
+            "framework": "spring-boot"
+        })
+    
+    return endpoints
+
+def parse_jaxrs_endpoints(self, content: str) -> List[Dict]:
+    """Parse JAX-RS resource endpoints"""
+    endpoints = []
+    
+    # Extract class-level @Path
+    class_path = ""
+    class_path_match = re.search(r'@Path\(["\']([^"\']+)["\']', content)
+    if class_path_match:
+        class_path = class_path_match.group(1)
+    
+    # Extract method-level annotations
+    method_pattern = r'@(GET|POST|PUT|DELETE|PATCH).*?@Path\(["\']([^"\']+)["\']'
+    method_matches = re.finditer(method_pattern, content, re.DOTALL)
+    
+    for match in method_matches:
+        method = match.group(1).lower()
+        path = class_path + match.group(2)
+        endpoints.append({
+            "path": path,
+            "method": method,
+            "framework": "jax-rs"
+        })
+    
+    return endpoints
+
+def parse_express_endpoints(self, content: str) -> List[Dict]:
+    """Parse Express.js route endpoints"""
+    endpoints = []
+    
+    # Regex patterns for Express routes
+    route_pattern = r'(app|router)\.(get|post|put|delete|patch)\(["\']([^"\']+)["\']'
+    
+    route_matches = re.finditer(route_pattern, content)
+    for match in route_matches:
+        method = match.group(2).lower()
+        path = match.group(3)
+        endpoints.append({
+            "path": path,
+            "method": method,
+            "framework": "express"
+        })
+    
+    return endpoints
+
+def parse_fastify_endpoints(self, content: str) -> List[Dict]:
+    """Parse Fastify route endpoints"""
+    endpoints = []
+    
+    # Regex patterns for Fastify routes
+    route_pattern = r'fastify\.(get|post|put|delete|patch)\(["\']([^"\']+)["\']'
+    
+    route_matches = re.finditer(route_pattern, content)
+    for match in route_matches:
+        method = match.group(1).lower()
+        path = match.group(2)
+        endpoints.append({
+            "path": path,
+            "method": method,
+            "framework": "fastify"
+        })
+    
+    return endpoints
+
+def create_openapi_spec(self, endpoints: List[Dict], service_name: str) -> Dict:
+    """Create OpenAPI specification from endpoints"""
+    spec = self.openapi_template.copy()
+    spec["info"]["title"] = f"{service_name} API"
+    
+    for endpoint in endpoints:
+        path = endpoint["path"]
+        method = endpoint["method"]
+        
+        # Initialize path if not exists
+        if path not in spec["paths"]:
+            spec["paths"][path] = {}
+        
+        # Add method to path
+        spec["paths"][path][method] = {
+            "summary": f"{method.upper()} {path}",
+            "description": f"Auto-generated endpoint for {method.upper()} {path}",
+            "responses": {
+                "200": {
+                    "description": "Successful response",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "message": {"type": "string"}
+                                }
+                            }
+                        }
+                    }
+                },
+                "400": {"description": "Bad request"},
+                "500": {"description": "Internal server error"}
+            }
+        }
+        
+        # Add request body for POST/PUT/PATCH
+        if method in ["post", "put", "patch"]:
+            spec["paths"][path][method]["requestBody"] = {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "data": {"type": "object"}
+                            }
+                        }
+                    }
+                }
+            }
+        
+        # Add path parameters if they exist
+        path_params = re.findall(r'\{([^}]+)\}', path)
+        if path_params:
+            spec["paths"][path][method]["parameters"] = []
+            for param in path_params:
+                spec["paths"][path][method]["parameters"].append({
+                    "name": param,
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string"}
+                })
+    
+    return spec
+
+def generate_specs(self):
+    """Main method to generate OpenAPI specs"""
+    raw_endpoints_dir = Path("generated/raw-endpoints")
+    openapi_specs_dir = Path("generated/openapi-specs")
+    
+    if not raw_endpoints_dir.exists():
+        print("❌ Raw endpoints directory not found!")
+        return
+    
+    openapi_specs_dir.mkdir(parents=True, exist_ok=True)
+    
+    all_endpoints = []
+    
+    # Process Java endpoints
+    java_endpoints_file = raw_endpoints_dir / "java-endpoints.txt"
+    if java_endpoints_file.exists():
+        with open(java_endpoints_file, 'r') as f:
+            content = f.read()
+            endpoints = self.parse_spring_boot_endpoints(content)
+            all_endpoints.extend(endpoints)
+            print(f"✅ Found {len(endpoints)} Spring Boot endpoints")
+    
+    # Process JAX-RS endpoints
+    jaxrs_endpoints_file = raw_endpoints_dir / "jaxrs-endpoints.txt"
+    if jaxrs_endpoints_file.exists():
+        with open(jaxrs_endpoints_file, 'r') as f:
+            content = f.read()
+            endpoints = self.parse_jaxrs_endpoints(content)
+            all_endpoints.extend(endpoints)
+            print(f"✅ Found {len(endpoints)} JAX-RS endpoints")
+    
+    # Process Express endpoints
+    nodejs_endpoints_file = raw_endpoints_dir / "nodejs-endpoints.txt"
+    if nodejs_endpoints_file.exists():
+        with open(nodejs_endpoints_file, 'r') as f:
+            content = f.read()
+            endpoints = self.parse_express_endpoints(content)
+            all_endpoints.extend(endpoints)
+            print(f"✅ Found {len(endpoints)} Express endpoints")
+    
+    # Process Fastify endpoints
+    fastify_endpoints_file = raw_endpoints_dir / "fastify-endpoints.txt"
+    if fastify_endpoints_file.exists():
+        with open(fastify_endpoints_file, 'r') as f:
+            content = f.read()
+            endpoints = self.parse_fastify_endpoints(content)
+            all_endpoints.extend(endpoints)
+            print(f"✅ Found {len(endpoints)} Fastify endpoints")
+    
+    if not all_endpoints:
+        print("❌ No endpoints found!")
+        return
+    
+    # Generate OpenAPI spec
+    spec = self.create_openapi_spec(all_endpoints, "Discovered")
+    
+    # Save as YAML
+    yaml_file = openapi_specs_dir / "api-spec.yaml"
+    with open(yaml_file, 'w') as f:
+        yaml.dump(spec, f, default_flow_style=False, sort_keys=False)
+    
+    # Save as JSON
+    json_file = openapi_specs_dir / "api-spec.json"
+    with open(json_file, 'w') as f:
+        json.dump(spec, f, indent=2)
+    
+    print(f"✅ Generated OpenAPI specs:")
+    print(f"   - YAML: {yaml_file}")
+    print(f"   - JSON: {json_file}")
+    print(f"   - Total endpoints: {len(all_endpoints)}")
+```
+
+if **name** == “**main**”:
+generator = OpenAPIGenerator()
+generator.generate_specs()
